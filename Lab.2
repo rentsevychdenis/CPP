@@ -1,0 +1,135 @@
+#include <windows.h>
+#include <cmath>
+
+HINSTANCE hInst;
+const wchar_t szTitle[] = L"Лабораторна робота 2 - Графік функції";
+const wchar_t szWindowClass[] = L"Lab2Window";
+
+int clientWidth = 800;
+int clientHeight = 600;
+
+const double X_MIN = -10.0;
+const double X_MAX = 10.0;
+const int NUM_POINTS = 500;
+const int MARGIN = 40;
+
+double f(double x) {
+    return x * std::sin(x);
+}
+
+POINT MapToScreen(double x, double y, double yMin, double yMax, int width, int height) {
+    POINT pt;
+    pt.x = MARGIN + static_cast<LONG>((x - X_MIN) * (width - 2 * MARGIN) / (X_MAX - X_MIN));
+    pt.y = (height - MARGIN) - static_cast<LONG>((y - yMin) * (height - 2 * MARGIN) / (yMax - yMin));
+    return pt;
+}
+
+LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
+    switch (message) {
+    case WM_SIZE: {
+        clientWidth = LOWORD(lParam);
+        clientHeight = HIWORD(lParam);
+        InvalidateRect(hWnd, NULL, TRUE);
+        break;
+    }
+    case WM_PAINT: {
+        PAINTSTRUCT ps;
+        HDC hdc = BeginPaint(hWnd, &ps);
+
+        double yMin = f(X_MIN);
+        double yMax = f(X_MIN);
+        double step = (X_MAX - X_MIN) / NUM_POINTS;
+
+        for (int i = 1; i <= NUM_POINTS; ++i) {
+            double x = X_MIN + i * step;
+            double y = f(x);
+            if (y < yMin) yMin = y;
+            if (y > yMax) yMax = y;
+        }
+
+        if (yMax - yMin < 0.0001) {
+            yMax += 1.0;
+            yMin -= 1.0;
+        }
+
+        HPEN axisPen = CreatePen(PS_SOLID, 1, RGB(150, 150, 150));
+        HPEN graphPen = CreatePen(PS_SOLID, 2, RGB(255, 0, 0));
+
+        SelectObject(hdc, axisPen);
+
+        if (yMin <= 0 && yMax >= 0) {
+            POINT pLeft = MapToScreen(X_MIN, 0, yMin, yMax, clientWidth, clientHeight);
+            POINT pRight = MapToScreen(X_MAX, 0, yMin, yMax, clientWidth, clientHeight);
+            MoveToEx(hdc, pLeft.x, pLeft.y, NULL);
+            LineTo(hdc, pRight.x, pRight.y);
+        }
+
+        if (X_MIN <= 0 && X_MAX >= 0) {
+            POINT pTop = MapToScreen(0, yMax, yMin, yMax, clientWidth, clientHeight);
+            POINT pBottom = MapToScreen(0, yMin, yMin, yMax, clientWidth, clientHeight);
+            MoveToEx(hdc, pTop.x, pTop.y, NULL);
+            LineTo(hdc, pBottom.x, pBottom.y);
+        }
+
+        SelectObject(hdc, graphPen);
+
+        POINT startPt = MapToScreen(X_MIN, f(X_MIN), yMin, yMax, clientWidth, clientHeight);
+        MoveToEx(hdc, startPt.x, startPt.y, NULL);
+
+        for (int i = 1; i <= NUM_POINTS; ++i) {
+            double x = X_MIN + i * step;
+            POINT pt = MapToScreen(x, f(x), yMin, yMax, clientWidth, clientHeight);
+            LineTo(hdc, pt.x, pt.y);
+        }
+
+        DeleteObject(axisPen);
+        DeleteObject(graphPen);
+
+        EndPaint(hWnd, &ps);
+        break;
+    }
+    case WM_DESTROY: {
+        PostQuitMessage(0);
+        break;
+    }
+    default:
+        return DefWindowProc(hWnd, message, wParam, lParam);
+    }
+    return 0;
+}
+
+int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow) {
+    hInst = hInstance;
+
+    WNDCLASSEXW wcex = { 0 };
+    wcex.cbSize = sizeof(WNDCLASSEX);
+    wcex.style = CS_HREDRAW | CS_VREDRAW;
+    wcex.lpfnWndProc = WndProc;
+    wcex.hInstance = hInstance;
+    wcex.hCursor = LoadCursor(nullptr, IDC_ARROW);
+    wcex.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
+    wcex.lpszClassName = szWindowClass;
+
+    if (!RegisterClassExW(&wcex)) {
+        return 0;
+    }
+
+    HWND hWnd = CreateWindowW(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW,
+        CW_USEDEFAULT, CW_USEDEFAULT, 800, 600,
+        nullptr, nullptr, hInstance, nullptr);
+
+    if (!hWnd) {
+        return 0;
+    }
+
+    ShowWindow(hWnd, nCmdShow);
+    UpdateWindow(hWnd);
+
+    MSG msg;
+    while (GetMessage(&msg, nullptr, 0, 0)) {
+        TranslateMessage(&msg);
+        DispatchMessage(&msg);
+    }
+
+    return (int)msg.wParam;
+}
